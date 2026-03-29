@@ -200,12 +200,81 @@ action = diffusion_policy(features)      # denoising diffusion → smooth action
 
 ---
 
+## Visuo-Tactile World Models (VT-WM) — Meta FAIR, 2026
+
+A **transformer-based autoregressive world model** that predicts future visuo-tactile states. Key details:
+
+```
+Vision encoder:  Cosmos Tokenizer (frozen) — 9 frames @ 6fps, 320×192 → latent C=16
+Tactile encoder: Sparsh-X (12-layer ViT, dim=768, fine-tuned)
+                 Sensor: Digit 360 (fisheye camera + 2 mics + accelerometer + pressure)
+                 4 sensors on Allegro Hand → 224×224 tactile images
+Predictor:       12-layer transformer with factorized spatio-temporal attention
+                 173M total params (96M trainable)
+Fusion:          Spatial token concatenation → positional embedding → [B, T, S, D]
+Loss:            L1 teacher-forcing + L1 autoregressive sampling (H=3-5 steps)
+Planning:        CEM with 36 particles, H=12 steps, L2 cost in latent space
+```
+
+**Key result**: VT-WM achieves 100% success on 4/5 tasks with zero-shot real robot planning, +10-35% over vision-only world models. Tactile input disambiguates contact states that look identical in vision.
+
+arXiv: [2602.06001](https://arxiv.org/abs/2602.06001)
+
+---
+
+## OmniVTLA — Vision-Tactile-Language-Action, 2025
+
+Built on the **π₀ VLA framework** with a novel dual-path tactile encoder:
+
+```
+Vision:   SigLiP encoder → 256 tokens per image (224×224)
+Tactile:  Dual-path:
+          Path 1: Pretrained ViT (fine-tuned) → 256 tokens
+          Path 2: SA-ViT (semantically-aligned via contrastive loss) → 256 tokens
+          → Concatenate both paths
+Language: PaliGemma tokenizer (vocab 257K)
+Backbone: Gemma-2B transformer
+Action:   Flow matching loss, 50-step chunks
+          Gripper: 10 tokens (3 pos + 6 rot + 1 grip)
+          Hand: 25 tokens (3 pos + 6 rot + 16 joints)
+```
+
+**Key result**: OmniVTLA achieves 96.9% gripper / 100% dexterous hand success (vs 75% for π₀ without tactile). SA-ViT achieves 70.4% material classification (vs 40.2% baseline).
+
+arXiv: [2508.08706](https://arxiv.org/abs/2508.08706)
+
+---
+
+## TANDEM Architecture Detail
+
+Co-trained **Explorer + Discriminator** on a 60×60 occupancy grid:
+
+```
+Explorer (PPO):
+  Input:  (1, 60, 60) occupancy grid — {white=contact, black=free, gray=unexplored}
+  Conv2d(1→32, 3×3) → ReLU → Conv2d(32→64, 3×3) → ReLU → MaxPool
+  → Flatten(50176) → FC(128) → Actor(4 discrete actions) + Critic(1)
+  Reward = Δ(mapped discriminator confidence), exponential scaling
+
+Discriminator (CNN):
+  Same conv backbone → FC(128) → FC(10 classes)
+  Confidence threshold: 0.98 → terminate and commit prediction
+
+Co-training: discriminator trains every 200K explorer steps on accumulated data
+```
+
+arXiv: [2203.00798](https://arxiv.org/abs/2203.00798)
+
+---
+
 ## Key Papers
 
 | Paper | Year | Key Contribution |
 |-------|------|------------------|
 | **3D-ViTac** (Huang et al.) | CoRL 2024 | Visuo-tactile fusion in 3D point cloud space + diffusion policy |
 | **Sparsh** (Higuera et al., Meta FAIR) | 2024 | SSL foundation model for touch (MAE/DINO/JEPA on 460K+ images) |
+| **VT-WM** (Higuera et al., Meta FAIR) | 2026 | Visuo-tactile world model, 173M params, zero-shot real robot planning |
+| **OmniVTLA** (Cheng et al.) | 2025 | Dual-path SA-ViT tactile encoder on π₀ backbone, 96.9% success |
 | **TANDEM** (Xu, Song & Ciocarlie) | 2022 | Active tactile exploration — robot decides where to touch |
 | **TacSL** (Akinola et al., NVIDIA) | 2024 | GPU-accelerated tactile simulation, 350× faster than prior work |
 | **Hand-Object Dynamics** (Zhang, Li et al., MIT) | 2021 | Tactile glove → 3D trajectory reconstruction from touch alone |
@@ -214,6 +283,8 @@ action = diffusion_policy(features)      # denoising diffusion → smooth action
 ### ArXiv Links
 - 3D-ViTac: [2410.24091](https://arxiv.org/abs/2410.24091)
 - Sparsh: [2410.24090](https://arxiv.org/abs/2410.24090)
+- VT-WM: [2602.06001](https://arxiv.org/abs/2602.06001)
+- OmniVTLA: [2508.08706](https://arxiv.org/abs/2508.08706)
 - TANDEM: [2203.00798](https://arxiv.org/abs/2203.00798)
 - TacSL: [2408.06506](https://arxiv.org/abs/2408.06506)
 - Hand-Object: [2109.04378](https://arxiv.org/abs/2109.04378)
